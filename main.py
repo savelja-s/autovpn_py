@@ -1,6 +1,8 @@
+import base64
 import datetime
 import json
 import os
+import random
 import re
 import requests
 
@@ -23,8 +25,14 @@ def download_file(url: str, file_name: str):
     open(file_name, 'wb').write(r.content)
 
 
+def save_vpn_config_file(vpn_config: dict, file_name: str):
+    config_base64 = vpn_config['open_v_p_n__config_data__base64']
+    open(file_name, 'wb').write(base64.b64decode(config_base64))
+
+
 def init():
-    os.makedirs('var/vpns/', exist_ok=True)
+    os.makedirs('var/vpn-history/', exist_ok=True)
+    os.makedirs('var/configs/', exist_ok=True)
 
 
 def file_to_array(file_name: str) -> list:
@@ -38,7 +46,7 @@ def file_to_array(file_name: str) -> list:
                 continue
             vpn_info = {h[idx]: item for idx, item in enumerate(line.split(','))}
             vpn_list.append(vpn_info)
-    file_json = f"var/vpns/{datetime.datetime.now().strftime('%Y-%m-%d_%H_%M')}.json"
+    file_json = f"var/vpn-history/{datetime.datetime.now().strftime('%Y-%m-%d_%H_%M')}.json"
     with open(file_json, 'w+', encoding='utf-8') as file:
         json.dump(vpn_list, file)
     return vpn_list
@@ -82,17 +90,14 @@ class CreateVPNConfig:
         self.size = len(vpn_config)
         if useFirstServer == 1:
             index = 0
-        #     if [ $useFirstServer -eq 1 ]; then
-        #         index=0
-        #         echo ${array[$index]} | awk -F "," '{ print $15 }' | base64 -d > /tmp/openvpn3
-        #     else
-        #         index=$(($RANDOM % $size))
-        #         echo ${array[$index]} | awk -F "," '{ print $15 }' | base64 -d > /tmp/openvpn3
-        #     fi
-        #     echo 'Choosing a VPN server:'
-        #     echo "Found VPN servers: $((size+1))"
-        #     echo "Selected: $index"
-        #     echo "Country: `echo ${array[$index]} | awk -F "," '{ print $6 }'`"
+        else:
+            index = random.randint(0, self.size - 1)
+        arr_config = array[index]
+        print('Choosing a VPN server:')
+        print(f'Found VPN servers: {self.size}')
+        print(f'Selected: {index}')
+        print(f'Country: {arr_config["country_short"]}')
+        save_vpn_config_file(array[index], f"var/configs/{datetime.datetime.now().strftime('%Y-%m-%d_%H_%M_%S')}")
 
 
 def run_vpn():
