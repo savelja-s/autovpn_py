@@ -1,11 +1,7 @@
-# autovpn3, coded by MiAl,
-# you can leave a bug report on the page: https://miloserdov.org/?p=5858
-# сообщить об ошибке на русском вы можете на странице: https://HackWare.ru/?p=15429
-
-# you can change these parameters:
+import datetime
+import json
 import os
 import re
-
 import requests
 
 country = ''  # empty for any or JP, KR, US, TH, etc.
@@ -27,6 +23,10 @@ def download_file(url: str, file_name: str):
     open(file_name, 'wb').write(r.content)
 
 
+def init():
+    os.makedirs('var/vpns/', exist_ok=True)
+
+
 def file_to_array(file_name: str) -> list:
     vpn_list = []
     with open(file_name) as file:
@@ -38,6 +38,9 @@ def file_to_array(file_name: str) -> list:
                 continue
             vpn_info = {h[idx]: item for idx, item in enumerate(line.split(','))}
             vpn_list.append(vpn_info)
+    file_json = f"var/vpns/{datetime.datetime.now().strftime('%Y-%m-%d_%H_%M')}.json"
+    with open(file_json, 'w+', encoding='utf-8') as file:
+        json.dump(vpn_list, file)
     return vpn_list
 
 
@@ -105,4 +108,5 @@ def run_vpn():
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
+    init()
     run_vpn()
