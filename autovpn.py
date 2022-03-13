@@ -243,7 +243,7 @@ class AutoVPNConnect:
 
 
 def init_arguments() -> list:
-    parser = argparse.ArgumentParser(description='Run FREE VPN SERVER.')
+    parser = argparse.ArgumentParser(description='Run FREE VPN SERVER. chech your IP: https://suip.biz/?act=myip')
     parser.add_argument(
         '--tg',
         nargs='?',
