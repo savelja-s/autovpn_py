@@ -70,7 +70,7 @@ class AutoVPNConnect:
     root_dir: str = os.path.dirname(__file__)
     url_list_vpn: str = 'https://www.vpngate.net/api/iphone/'
     ATTEMPTS: int = 5
-    config_path: str
+    config_path: str = 'var/configs/autovpn_current.ovpn'
     country_code: str = None
     vpn_list: list = None
     current_index: int = None
@@ -129,6 +129,7 @@ class AutoVPNConnect:
 
     def __init__(self, country_code, is_random=False, sec_change_ip=None):
         self.is_random = is_random
+        self.current_index = -1
         if sec_change_ip:
             self.sec_change_ip = sec_change_ip
         if country_code:
