@@ -51,10 +51,9 @@ class bcolors:
 # print(' '.join([colors_16(x) for x in range(30, 38)]))
 # print("\nThe 256 colors scheme is:")
 # print(' '.join([colors_256(x) for x in range(256)]))
-ROOT_DIR: str = os.path.dirname(__file__)
-if ROOT_DIR:
-    ROOT_DIR = ROOT_DIR + '/'
-logging.basicConfig(filename=f'{ROOT_DIR}var/logs/general.log',
+# ROOT_DIR: str = os.path.dirname(__file__)
+ROOT_DIR: str = '/'
+logging.basicConfig(filename=f'{ROOT_DIR}var/log/autovpn_py.log',
                     filemode='a',
                     format='%(asctime)s %(name)s %(levelname)s %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S',
@@ -124,7 +123,10 @@ class AutoVPNConnect:
 
     def update_list_file(self) -> list:
         # TODO: maybe one request in 10 min
-        file_path = f"{ROOT_DIR}var/vpn-history/{datetime.datetime.now().strftime('%Y-%m-%d_%H')}.json"
+        file_dir = f"{ROOT_DIR}tmp/vpn-history"
+        os.makedirs(file_dir, exist_ok=True)
+        interval = datetime.datetime.now().hour % 10
+        file_path = f"{file_dir}/{datetime.datetime.now().strftime('%Y-%m-%d_')}{interval}.json"
         # file_path = f"var/vpn-history/{datetime.datetime.now().strftime('%Y-%m-%d_%H_%M')}.json"
         if os.path.isfile(file_path):
             print(f'{bcolors.C_87}LOAD FILE with cache{bcolors.ENDC}')
@@ -141,7 +143,7 @@ class AutoVPNConnect:
         return vpn_list
 
     def save_config_file(self, vpn_config):
-        self.config_path = f"{ROOT_DIR}var/configs/{datetime.datetime.now().strftime('%Y-%m-%d_%H_%M_%S')}"
+        self.config_path = f"{ROOT_DIR}tmp/autovpn_config.ovpn"
         open(self.config_path, 'wb').write(
             base64.b64decode(vpn_config['open_v_p_n__config_data__base64'])
         )
@@ -204,7 +206,10 @@ class AutoVPNConnect:
             count = 1
             time.sleep(1)
             loop_track_ip = loop_track_ip + 1
-            if not loop_track_ip % TIME_TRACK_IP and origin_ip != track_my_ip():
+            if not loop_track_ip % TIME_TRACK_IP and origin_ip == track_my_ip():
+                msg = f'{bcolors.FAIL}IP:{origin_ip}.RESET CONNECT{bcolors.ENDC}'
+                print(msg)
+                logging.info(msg.upper())
                 break
             if not self.sec_change_ip:
                 continue
