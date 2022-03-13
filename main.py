@@ -6,9 +6,8 @@ import random
 import re
 import signal
 import subprocess
+import sys
 import time
-
-import psutil
 import requests
 
 
@@ -68,6 +67,7 @@ def get_vpn_list(url: str):
 
 
 class AutoVPNConnect:
+    root_dir: str = os.path.dirname(__file__)
     url_list_vpn: str = 'https://www.vpngate.net/api/iphone/'
     ATTEMPTS: int = 5
     config_path: str
@@ -76,9 +76,11 @@ class AutoVPNConnect:
     current_index: int = None
     is_random: bool
     process = None
+    sec_change_ip: int = None
 
     def update_list_file(self) -> list:
-        file_path = f"var/vpn-history/{datetime.datetime.now().strftime('%Y-%m-%d_%H')}.json"
+        # TODO: maybe one request in 10 min
+        file_path = f"{self.root_dir}/var/vpn-history/{datetime.datetime.now().strftime('%Y-%m-%d_%H')}.json"
         # file_path = f"var/vpn-history/{datetime.datetime.now().strftime('%Y-%m-%d_%H_%M')}.json"
         if os.path.isfile(file_path):
             print(f'{bcolors.OKBLUE}LOAD FILE with cache{bcolors.ENDC}')
@@ -86,6 +88,7 @@ class AutoVPNConnect:
         else:
             print(f'{bcolors.OKGREEN}UPLOAD FILE with {self.url_list_vpn}{bcolors.ENDC}')
             vpn_list = get_vpn_list(self.url_list_vpn)
+            self.current_index = -1
         vpn_list.sort(key=lambda item: item['speed'], reverse=True)
         save_json(vpn_list, file_path)
         if self.country_code:
@@ -94,23 +97,25 @@ class AutoVPNConnect:
         return vpn_list
 
     def save_config_file(self, vpn_config):
-        self.config_path = f"var/configs/{datetime.datetime.now().strftime('%Y-%m-%d_%H_%M_%S')}"
+        self.config_path = f"{self.root_dir}/var/configs/{datetime.datetime.now().strftime('%Y-%m-%d_%H_%M_%S')}"
         open(self.config_path, 'wb').write(
             base64.b64decode(vpn_config['open_v_p_n__config_data__base64'])
         )
 
     def init_config(self):
-        if self.current_index is None or self.vpn_list is None or not len(self.vpn_list):
+        self.update_list_file()
+        if self.vpn_list is None or not len(self.vpn_list):
             msg = 'Not init index.'
             print(f'{bcolors.FAIL}{msg}{bcolors.ENDC}')
             raise RuntimeError(msg)
         count = len(self.vpn_list)
         if self.is_random:
             self.current_index = random.randint(0, count - 1)
+        else:
+            next_index = self.current_index + 1
+            self.current_index = 0 if count < next_index else next_index
         config = self.vpn_list[self.current_index]
         self.save_config_file(config)
-        next_index = self.current_index + 1
-        self.current_index = 0 if count < next_index else next_index
         speed_mb = int(config["speed"]) / (1024 * 1024)
         print(f'{bcolors.C_YELLOW}INIT CONFIG:{bcolors.ENDC}')
         print(f'{bcolors.C_YELLOW}- Host name: {config["host_name"]}{bcolors.ENDC}')
@@ -118,17 +123,17 @@ class AutoVPNConnect:
         print(f'{bcolors.C_YELLOW}- Country CODE: {config["country_short"]}{bcolors.ENDC}')
         print(f'{bcolors.C_YELLOW}- ID: {config["i_p"]}{bcolors.ENDC}')
         print(f'{bcolors.C_YELLOW}- Ping: {config["ping"]}{bcolors.ENDC}')
-        print(f'{bcolors.C_YELLOW}- Speed: {speed_mb} Mb{bcolors.ENDC}')
+        print(f'{bcolors.C_YELLOW}- Speed: {round(speed_mb, 2)} Mb{bcolors.ENDC}')
         print(f'{bcolors.C_YELLOW}- Total users: {config["total_users"]}{bcolors.ENDC}')
         print(f'{bcolors.C_YELLOW}- Operator: {config["operator"]}{bcolors.ENDC}')
 
-    def __init__(self, country_code: str = None, is_random: bool = False, target_host: str = None):
-        self.target_host = target_host
+    def __init__(self, country_code, is_random=False, sec_change_ip=None):
         self.is_random = is_random
-        self.current_index = 0
+        if sec_change_ip:
+            self.sec_change_ip = sec_change_ip
         if country_code:
             self.country_code = country_code.upper()
-        self.update_list_file()
+        self.current_index = -1
 
     def __del__(self):
         if self.process:
@@ -138,13 +143,19 @@ class AutoVPNConnect:
 
     def run(self, count: int = 1):
         self.init_config()
-        self.process = subprocess.Popen(['sudo', 'openvpn', '--auth-nocache', '--config', self.config_path])
-        with self.process:
-            print(f'{bcolors.WARNING}Run....{bcolors.ENDC}')
+        self.process = subprocess.Popen(['openvpn', '--auth-nocache', '--config', self.config_path])
+        print(f'{bcolors.WARNING}Run....{bcolors.ENDC}')
         print(f'{bcolors.OKBLUE}Process PID {self.process.pid} start loop.{bcolors.ENDC}')
+        loop = 0
         while self.process.poll() != 0:
             time.sleep(1)
-            # TODO: ping target_host and reset
+            if not self.sec_change_ip:
+                continue
+            loop = loop + 1
+            if loop > self.sec_change_ip:
+                count = 1
+                print(f'{bcolors.BOLD}New connect once in {self.sec_change_ip}.{bcolors.ENDC}')
+                break
         self.process.kill()
         print(f'{bcolors.FAIL}Process PID {self.process.pid} killed{bcolors.ENDC}')
         self.process = None
@@ -157,31 +168,19 @@ class AutoVPNConnect:
         self.run(count)
 
 
-def kill_all_old_process(process_name: str):
-    process = [(int(p), c) for p, c in
-               [x.rstrip('\n').split(' ', 1) for x in os.popen(f'ps h -eo pid:1,command | grep {process_name}')]]
-    # print(process)
-    processes = filter(lambda p: 'grep' not in p[1].lower(), process)
-    for proc in processes:
-        if os.getpid() != proc[0]:
-            print(f'{bcolors.FAIL}   - KILL PID:{proc[0]},CMD:{proc[1]} {bcolors.ENDC}')
-            os.popen(f'sudo kill -9 {proc[0]}')
-
-
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    def ctrl_z(e, r):
-        print(f'{bcolors.C_BLUE}FORCED STOP:{bcolors.ENDC}')
-        kill_all_old_process('main.py')
-        print(f'{bcolors.C_GREEN}- All main.py{bcolors.ENDC}')
-        kill_all_old_process('openvpn')
-        print(f'{bcolors.C_GREEN}- All openvpn{bcolors.ENDC}')
-        exit()
-
-
-    signal.signal(signal.SIGTSTP, ctrl_z)  # ctrl + z
     try:
-        connect = AutoVPNConnect('ru', True)
+        connect = AutoVPNConnect('ru', False, 180)
+
+
+        def ctrl_z(e, r):
+            print(f'{bcolors.C_BLUE}FORCED STOP:{bcolors.ENDC}')
+            print(f'{bcolors.C_GREEN}GOOD LOCK!!!{bcolors.ENDC}')
+            connect.__del__()
+
+
+        signal.signal(signal.SIGTSTP, ctrl_z)  # ctrl + z
         connect.run()
     except RuntimeError as error:
         print(f"{bcolors.WARNING}RUNTIMEERROR:{bcolors.ENDC}", error)
