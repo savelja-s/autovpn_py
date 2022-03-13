@@ -273,7 +273,7 @@ def init_arguments() -> list:
         nargs='?',
         type=str,
         dest='country',
-        help='Country code',
+        help='Country code if exist in list',
         default=None
     )
     parser.add_argument(
