@@ -1,4 +1,4 @@
-#!/bin/python3
+#!/usr/bin/env python3
 
 import base64
 import datetime
@@ -10,13 +10,10 @@ import signal
 import subprocess
 import sys
 import time
-
+import argparse
 import requests
 import logging
-
 from simplejson import JSONDecodeError
-
-TIME_TRACK_IP = 30
 
 
 class bcolors:
@@ -53,8 +50,8 @@ class bcolors:
 # print(' '.join([colors_16(x) for x in range(30, 38)]))
 # print("\nThe 256 colors scheme is:")
 # print(' '.join([colors_256(x) for x in range(256)]))
-# ROOT_DIR: str = os.path.dirname(__file__)
-ROOT_DIR: str = '/'
+ROOT_DIR: str = os.path.dirname(__file__) + '/'
+# ROOT_DIR: str = '/'
 logging.basicConfig(filename=f'{ROOT_DIR}var/log/autovpn_py.log',
                     filemode='a',
                     format='%(asctime)s %(name)s %(levelname)s %(message)s',
@@ -113,7 +110,6 @@ def get_vpn_list(url: str):
 
 class AutoVPNConnect:
     url_list_vpn: str = 'https://www.vpngate.net/api/iphone/'
-    ATTEMPTS: int = 5
     config_path: str
     country_code: str = None
     vpn_list: list = None
@@ -122,6 +118,7 @@ class AutoVPNConnect:
     process = None
     sec_change_ip: int = None
     is_force_stopped: bool = False
+    target: str = None
 
     def update_list_file(self) -> list:
         # TODO: maybe one request in 10 min
@@ -176,8 +173,18 @@ class AutoVPNConnect:
         print(f'{bcolors.C_GREEN}- Total users: {config["total_users"]}{bcolors.ENDC}')
         print(f'{bcolors.C_GREEN}- Operator: {config["operator"]}{bcolors.ENDC}')
 
-    def __init__(self, country_code, is_random=False, sec_change_ip=None):
+    def __init__(self,
+                 country_code,
+                 is_random=False,
+                 sec_change_ip=None,
+                 _target=None,
+                 _attempts=6,
+                 _time_track_ip=180
+                 ):
         self.is_random = is_random
+        self.target = _target
+        self.attempts = _attempts
+        self.time_track_ip = _time_track_ip
         self.current_index = -1
         if sec_change_ip:
             self.sec_change_ip = sec_change_ip
@@ -208,7 +215,7 @@ class AutoVPNConnect:
             count = 1
             time.sleep(1)
             loop_track_ip = loop_track_ip + 1
-            if not loop_track_ip % TIME_TRACK_IP and origin_ip == track_my_ip():
+            if not loop_track_ip % self.time_track_ip and origin_ip == track_my_ip():
                 msg = f'{bcolors.FAIL}IP:{origin_ip}.RESET CONNECT{bcolors.ENDC}'
                 print(msg)
                 logging.info(msg.upper())
@@ -226,7 +233,7 @@ class AutoVPNConnect:
         logging.info('STOP VPN')
         print(f'{bcolors.FAIL}Process PID {self.process.pid} killed{bcolors.ENDC}')
         self.process = None
-        if not self.is_force_stopped and count == self.ATTEMPTS:
+        if not self.is_force_stopped and count == self.attempts:
             msg = f'{bcolors.WARNING}VPN server stopped attempt {count}.{bcolors.ENDC}'
             print(msg)
             logging.info(msg.upper())
@@ -235,11 +242,58 @@ class AutoVPNConnect:
         self.run(count)
 
 
+def init_arguments() -> list:
+    parser = argparse.ArgumentParser(description='Run FREE VPN SERVER.')
+    parser.add_argument(
+        '--tg',
+        nargs='?',
+        type=str,
+        dest='target',
+        help='Check whether it is not blocked for this hostname or IP(default None)',
+        default=None
+    )
+    parser.add_argument(
+        '--att',
+        nargs='?',
+        type=str,
+        dest='attempts',
+        help='The number of attempts to obtain errors before shutdown(default 5)',
+        default=5
+    )
+    parser.add_argument(
+        '--tp_ip',
+        nargs='?',
+        type=str,
+        dest='time_ping_ip',
+        help='The time of the poll has changed my ip(default 120)',
+        default=120
+    )
+    parser.add_argument(
+        '--c',
+        nargs='?',
+        type=str,
+        dest='country',
+        help='Country code',
+        default=None
+    )
+    parser.add_argument(
+        '--r',
+        nargs='?',
+        type=bool,
+        dest='is_random',
+        help='Random VPN service(default True)',
+        default=True
+    )
+    args = parser.parse_args()
+    return [args.target, args.attempts, args.time_ping_ip, args.country, args.is_random]
+
+
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     try:
+        target, attempts, time_ping_ip, country, is_random = init_arguments()
         logging.info('START VPN')
-        connect = AutoVPNConnect('ru', True, 180)
+        connect = AutoVPNConnect(country, is_random, time_ping_ip, target, attempts)
 
 
         def ctrl_z(e, r):
