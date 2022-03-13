@@ -272,9 +272,9 @@ def init_arguments() -> list:
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     try:
-        attempts, time_ping_ip, country, random = init_arguments()
+        attempts, time_ping_ip, country, _random = init_arguments()
         logging.info('START VPN')
-        connect = AutoVPNConnect(country, random, time_ping_ip, attempts)
+        connect = AutoVPNConnect(country, _random, time_ping_ip, attempts)
 
 
         def ctrl_z(e, r):
