@@ -8,7 +8,13 @@ import signal
 import subprocess
 import sys
 import time
+
 import requests
+import logging
+
+from simplejson import JSONDecodeError
+
+TIME_TRACK_IP = 30
 
 
 class bcolors:
@@ -24,6 +30,7 @@ class bcolors:
     C_BLUE = '\033[38;5;21m'
     C_GREEN = '\033[38;5;46m'
     C_YELLOW = '\033[38;5;226m'
+    C_87 = '\033[38;5;87m'
 
 
 #
@@ -44,6 +51,43 @@ class bcolors:
 # print(' '.join([colors_16(x) for x in range(30, 38)]))
 # print("\nThe 256 colors scheme is:")
 # print(' '.join([colors_256(x) for x in range(256)]))
+ROOT_DIR: str = os.path.dirname(__file__)
+if ROOT_DIR:
+    ROOT_DIR = ROOT_DIR + '/'
+logging.basicConfig(filename=f'{ROOT_DIR}var/logs/general.log',
+                    filemode='a',
+                    format='%(asctime)s %(name)s %(levelname)s %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S',
+                    level=logging.DEBUG)
+
+
+def track_my_ip() -> str:
+    list_urls = [
+        'https://checkip.amazonaws.com',
+        'https://api.ipify.org',
+        'https://ident.me',
+        'http://ipgrab.io',
+        'http://ipecho.net/plain',
+        'https://icanhazip.com',
+        'http://ip.jsontest.com',
+        'http://ip.42.pl/raw',
+        'http://jsonip.com',
+        'https://ipapi.co/ip',
+        'http://myexternalip.com/raw',
+        'https://wtfismyip.com/text',
+        'http://ipinfo.io/json',
+    ]
+    url = list_urls[random.randint(0, len(list_urls) - 1)]
+    response = requests.get(url=url)
+    response.encoding = 'UTF-8'
+    try:
+        response = response.json()
+        ip = response['ip']
+    except JSONDecodeError:
+        response = response.text
+        ip = response.strip()
+    logging.info('CURRENT IP:' + str(response))
+    return ip
 
 
 def save_json(data, file_json: str):
@@ -67,23 +111,23 @@ def get_vpn_list(url: str):
 
 
 class AutoVPNConnect:
-    root_dir: str = os.path.dirname(__file__)
     url_list_vpn: str = 'https://www.vpngate.net/api/iphone/'
     ATTEMPTS: int = 5
-    config_path: str = 'var/configs/autovpn_current.ovpn'
+    config_path: str
     country_code: str = None
     vpn_list: list = None
     current_index: int = None
     is_random: bool
     process = None
     sec_change_ip: int = None
+    is_force_stopped: bool = False
 
     def update_list_file(self) -> list:
         # TODO: maybe one request in 10 min
-        file_path = f"{self.root_dir}/var/vpn-history/{datetime.datetime.now().strftime('%Y-%m-%d_%H')}.json"
+        file_path = f"{ROOT_DIR}var/vpn-history/{datetime.datetime.now().strftime('%Y-%m-%d_%H')}.json"
         # file_path = f"var/vpn-history/{datetime.datetime.now().strftime('%Y-%m-%d_%H_%M')}.json"
         if os.path.isfile(file_path):
-            print(f'{bcolors.OKBLUE}LOAD FILE with cache{bcolors.ENDC}')
+            print(f'{bcolors.C_87}LOAD FILE with cache{bcolors.ENDC}')
             vpn_list = json.load(open(file_path))
         else:
             print(f'{bcolors.OKGREEN}UPLOAD FILE with {self.url_list_vpn}{bcolors.ENDC}')
@@ -97,7 +141,7 @@ class AutoVPNConnect:
         return vpn_list
 
     def save_config_file(self, vpn_config):
-        self.config_path = f"{self.root_dir}/var/configs/{datetime.datetime.now().strftime('%Y-%m-%d_%H_%M_%S')}"
+        self.config_path = f"{ROOT_DIR}var/configs/{datetime.datetime.now().strftime('%Y-%m-%d_%H_%M_%S')}"
         open(self.config_path, 'wb').write(
             base64.b64decode(vpn_config['open_v_p_n__config_data__base64'])
         )
@@ -115,17 +159,18 @@ class AutoVPNConnect:
             next_index = self.current_index + 1
             self.current_index = 0 if count < next_index else next_index
         config = self.vpn_list[self.current_index]
+        logging.info('INIT CONFIG:' + str(config))
         self.save_config_file(config)
         speed_mb = int(config["speed"]) / (1024 * 1024)
-        print(f'{bcolors.C_YELLOW}INIT CONFIG:{bcolors.ENDC}')
-        print(f'{bcolors.C_YELLOW}- Host name: {config["host_name"]}{bcolors.ENDC}')
-        print(f'{bcolors.C_YELLOW}- Country: {config["country_long"]}{bcolors.ENDC}')
-        print(f'{bcolors.C_YELLOW}- Country CODE: {config["country_short"]}{bcolors.ENDC}')
-        print(f'{bcolors.C_YELLOW}- ID: {config["i_p"]}{bcolors.ENDC}')
-        print(f'{bcolors.C_YELLOW}- Ping: {config["ping"]}{bcolors.ENDC}')
-        print(f'{bcolors.C_YELLOW}- Speed: {round(speed_mb, 2)} Mb{bcolors.ENDC}')
-        print(f'{bcolors.C_YELLOW}- Total users: {config["total_users"]}{bcolors.ENDC}')
-        print(f'{bcolors.C_YELLOW}- Operator: {config["operator"]}{bcolors.ENDC}')
+        print(f'{bcolors.C_GREEN}INIT CONFIG:{bcolors.ENDC}')
+        print(f'{bcolors.C_GREEN}- Host name: {config["host_name"]}{bcolors.ENDC}')
+        print(f'{bcolors.C_GREEN}- Country: {config["country_long"]}{bcolors.ENDC}')
+        print(f'{bcolors.C_GREEN}- Country CODE: {config["country_short"]}{bcolors.ENDC}')
+        print(f'{bcolors.C_GREEN}- ID: {config["i_p"]}{bcolors.ENDC}')
+        print(f'{bcolors.C_GREEN}- Ping: {config["ping"]}{bcolors.ENDC}')
+        print(f'{bcolors.C_GREEN}- Speed: {round(speed_mb, 2)} Mb{bcolors.ENDC}')
+        print(f'{bcolors.C_GREEN}- Total users: {config["total_users"]}{bcolors.ENDC}')
+        print(f'{bcolors.C_GREEN}- Operator: {config["operator"]}{bcolors.ENDC}')
 
     def __init__(self, country_code, is_random=False, sec_change_ip=None):
         self.is_random = is_random
@@ -143,27 +188,41 @@ class AutoVPNConnect:
             os.kill(os.getpid(), signal.SIGKILL)
 
     def run(self, count: int = 1):
+        self.is_force_stopped = False
+        origin_ip = track_my_ip()
+        msg = f'{bcolors.C_GREEN}CURRENT IP: {origin_ip}{bcolors.ENDC}'
+        print(msg)
+        logging.info(msg)
         self.init_config()
         self.process = subprocess.Popen(['openvpn', '--auth-nocache', '--config', self.config_path])
-        print(f'{bcolors.WARNING}Run....{bcolors.ENDC}')
+        print(f'{bcolors.C_YELLOW}Run....{bcolors.ENDC}')
         print(f'{bcolors.OKBLUE}Process PID {self.process.pid} start loop.{bcolors.ENDC}')
+        logging.info('RUN VPN')
         loop = 0
+        loop_track_ip = 0
         while self.process.poll() != 0:
+            count = 1
             time.sleep(1)
+            loop_track_ip = loop_track_ip + 1
+            if not loop_track_ip % TIME_TRACK_IP and origin_ip != track_my_ip():
+                break
             if not self.sec_change_ip:
                 continue
             loop = loop + 1
             if loop > self.sec_change_ip:
                 count = 1
-                print(f'{bcolors.BOLD}New connect once in {self.sec_change_ip}.{bcolors.ENDC}')
+                msg = f'{bcolors.BOLD}New connect once in {self.sec_change_ip}{bcolors.ENDC}'
+                print(msg)
+                logging.info(msg.upper())
                 break
         self.process.kill()
+        logging.info('STOP VPN')
         print(f'{bcolors.FAIL}Process PID {self.process.pid} killed{bcolors.ENDC}')
         self.process = None
-        if count == self.ATTEMPTS:
-            msg = f'VPN server stopped attempt {count}.'
+        if not self.is_force_stopped and count == self.ATTEMPTS:
+            msg = f'{bcolors.WARNING}VPN server stopped attempt {count}.{bcolors.ENDC}'
             print(msg)
-            print(f'{bcolors.WARNING}{msg}{bcolors.ENDC}')
+            logging.info(msg.upper())
             raise RuntimeError(msg)
         count = count + 1
         self.run(count)
@@ -172,7 +231,8 @@ class AutoVPNConnect:
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     try:
-        connect = AutoVPNConnect('ru', False, 180)
+        logging.info('START VPN')
+        connect = AutoVPNConnect('ru', True, 180)
 
 
         def ctrl_z(e, r):
@@ -181,9 +241,16 @@ if __name__ == '__main__':
             connect.__del__()
 
 
+        def ctrl_c(e, r):
+            connect.is_force_stopped = True
+            print(f'{bcolors.C_GREEN}FORCED NEXT VPN SERVER{bcolors.ENDC}')
+
+
         signal.signal(signal.SIGTSTP, ctrl_z)  # ctrl + z
+        signal.signal(signal.SIGINT, ctrl_c)  # ctrl + c
         connect.run()
     except RuntimeError as error:
-        print(f"{bcolors.WARNING}RUNTIMEERROR:{bcolors.ENDC}", error)
+        print(f"{bcolors.WARNING}RUNTIME ERROR:{bcolors.ENDC}", error)
 
+    logging.info('END VPN')
     print(f"{bcolors.UNDERLINE}STOP VPN{bcolors.ENDC}")
