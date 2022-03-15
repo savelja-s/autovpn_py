@@ -2,6 +2,7 @@
 
 import base64
 import datetime
+import io
 import json
 import os
 import random
@@ -50,6 +51,7 @@ class bcolors:
 # print(' '.join([colors_16(x) for x in range(30, 38)]))
 # print("\nThe 256 colors scheme is:")
 # print(' '.join([colors_256(x) for x in range(256)]))
+
 # ROOT_DIR: str = os.path.dirname(__file__) + '/'
 ROOT_DIR: str = '/'
 logging.basicConfig(filename=f'{ROOT_DIR}var/log/autovpn_py.log',
@@ -118,12 +120,34 @@ class AutoVPNConnect:
     process = None
     sec_change_ip: int = None
     is_force_stopped: bool = False
+    run_at = None
+
+    def _handler_vpn_loop(self) -> bool:
+        for line in io.TextIOWrapper(self.process.stdout, encoding='utf-8'):
+            if 'Restart pause,' in line:
+                print(line.strip())
+            elif 'Initialization Sequence Completed' in line:
+                print(line.strip())
+            sec_worked = round((self.run_at - datetime.datetime.now()).total_seconds())
+            interval_track = sec_worked % self.time_track_ip
+            #TODO: якщо немає записц 'Initialization Sequence Completed' 5 секунд рестартнути
+            if interval_track > self.time_track_ip - 10 and self.origin_ip == track_my_ip():
+                msg = f'{bcolors.FAIL}IP:{self.origin_ip}.RESET CONNECT{bcolors.ENDC}'
+                print(msg)
+                logging.info(msg.upper())
+                return False
+            elif sec_worked > self.sec_change_ip:
+                msg = f'{bcolors.BOLD}New connect once in {self.sec_change_ip}{bcolors.ENDC}'
+                print(msg)
+                logging.info(msg.upper())
+                return True
+        return False
 
     def update_list_file(self) -> list:
         file_dir = f"{ROOT_DIR}tmp/vpn-history"
         os.makedirs(file_dir, exist_ok=True)
-        interval = datetime.datetime.now().hour % 10
-        file_path = f"{file_dir}/{datetime.datetime.now().strftime('%Y-%m-%d_')}{interval}.json"
+        interval = divmod(datetime.datetime.now().minute, 10)[0]
+        file_path = f"{file_dir}/{datetime.datetime.now().strftime('%Y-%m-%d_%H_')}{interval}.json"
         if os.path.isfile(file_path):
             print(f'{bcolors.C_87}LOAD FILE with cache{bcolors.ENDC}')
             vpn_list = json.load(open(file_path))
@@ -170,9 +194,9 @@ class AutoVPNConnect:
         print(f'{bcolors.C_GREEN}- Total users: {config["total_users"]}{bcolors.ENDC}')
         print(f'{bcolors.C_GREEN}- Operator: {config["operator"]}{bcolors.ENDC}')
 
-    def __init__(self, country_code, _random=False, sec_change_ip=None, _attempts=6, _time_track_ip=180):
+    def __init__(self, country_code, _random=False, sec_change_ip=None, _time_track_ip=180):
+        self.origin_ip = track_my_ip()
         self.random = _random
-        self.attempts = _attempts
         self.time_track_ip = _time_track_ip
         self.current_index = -1
         if sec_change_ip:
@@ -187,48 +211,30 @@ class AutoVPNConnect:
             print(f'{bcolors.FAIL}Stop class and process {self.process.pid}{bcolors.ENDC}')
             os.kill(os.getpid(), signal.SIGKILL)
 
-    def run(self, count: int = 1):
+    def run(self):
         self.is_force_stopped = False
-        origin_ip = track_my_ip()
-        msg = f'{bcolors.C_GREEN}CURRENT IP: {origin_ip}{bcolors.ENDC}'
+        self.run_at = datetime.datetime.now()
+        msg = f'{bcolors.C_GREEN}CURRENT IP: {self.origin_ip}{bcolors.ENDC}'
         print(msg)
         logging.info(msg)
         self.init_config()
-        self.process = subprocess.Popen(['openvpn', '--auth-nocache', '--config', self.config_path])
+        self.process = subprocess.Popen([
+            'openvpn',
+            '--verb',
+            '4',
+            '--auth-nocache',
+            '--config',
+            self.config_path
+        ], shell=False, stdout=subprocess.PIPE)
         print(f'{bcolors.C_YELLOW}Run....{bcolors.ENDC}')
         print(f'{bcolors.OKBLUE}Process PID {self.process.pid} start loop.{bcolors.ENDC}')
         logging.info('RUN VPN')
-        loop = 0
-        loop_track_ip = 0
-        while self.process.poll() != 0:
-            count = 1
-            time.sleep(1)
-            loop_track_ip = loop_track_ip + 1
-            if not loop_track_ip % self.time_track_ip and origin_ip == track_my_ip():
-                msg = f'{bcolors.FAIL}IP:{origin_ip}.RESET CONNECT{bcolors.ENDC}'
-                print(msg)
-                logging.info(msg.upper())
-                break
-            if not self.sec_change_ip:
-                continue
-            loop = loop + 1
-            if loop > self.sec_change_ip:
-                count = 1
-                msg = f'{bcolors.BOLD}New connect once in {self.sec_change_ip}{bcolors.ENDC}'
-                print(msg)
-                logging.info(msg.upper())
-                break
+        self._handler_vpn_loop()
         self.process.kill()
         logging.info('STOP VPN')
         print(f'{bcolors.FAIL}Process PID {self.process.pid} killed{bcolors.ENDC}')
         self.process = None
-        if not self.is_force_stopped and count == self.attempts:
-            msg = f'{bcolors.WARNING}VPN server stopped attempt {count}.{bcolors.ENDC}'
-            print(msg)
-            logging.info(msg.upper())
-            raise RuntimeError(msg)
-        count = count + 1
-        self.run(count)
+        self.run()
 
 
 def init_arguments() -> list:
