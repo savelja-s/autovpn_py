@@ -52,8 +52,8 @@ class bcolors:
 # print("\nThe 256 colors scheme is:")
 # print(' '.join([colors_256(x) for x in range(256)]))
 
-# ROOT_DIR: str = os.path.dirname(__file__) + '/'
-ROOT_DIR: str = '/'
+ROOT_DIR: str = os.path.dirname(__file__) + '/'
+# ROOT_DIR: str = '/'
 logging.basicConfig(filename=f'{ROOT_DIR}var/log/autovpn_py.log',
                     filemode='a',
                     format='%(asctime)s %(name)s %(levelname)s %(message)s',
@@ -123,15 +123,19 @@ class AutoVPNConnect:
     run_at = None
 
     def _handler_vpn_loop(self) -> bool:
+        started = False
         for line in io.TextIOWrapper(self.process.stdout, encoding='utf-8'):
             if 'Restart pause,' in line:
                 print(line.strip())
             elif 'Initialization Sequence Completed' in line:
+                started = True
+                print(line.strip())
+            else:
                 print(line.strip())
             sec_worked = round((self.run_at - datetime.datetime.now()).total_seconds())
             interval_track = sec_worked % self.time_track_ip
-            #TODO: якщо немає записц 'Initialization Sequence Completed' 5 секунд рестартнути
-            if interval_track > self.time_track_ip - 10 and self.origin_ip == track_my_ip():
+            # TODO: якщо немає записц 'Initialization Sequence Completed' 5 секунд рестартнути
+            if started and interval_track > self.time_track_ip - 10 and self.origin_ip == track_my_ip():
                 msg = f'{bcolors.FAIL}IP:{self.origin_ip}.RESET CONNECT{bcolors.ENDC}'
                 print(msg)
                 logging.info(msg.upper())
