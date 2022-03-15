@@ -135,16 +135,19 @@ class AutoVPNConnect:
             sec_worked = round((self.run_at - datetime.datetime.now()).total_seconds())
             interval_track = sec_worked % self.time_track_ip
             # TODO: якщо немає записц 'Initialization Sequence Completed' 5 секунд рестартнути
-            if started and interval_track > self.time_track_ip - 10 and self.origin_ip == track_my_ip():
-                msg = f'{bcolors.FAIL}IP:{self.origin_ip}.RESET CONNECT{bcolors.ENDC}'
-                print(msg)
-                logging.info(msg.upper())
-                return False
-            elif sec_worked > self.sec_change_ip:
-                msg = f'{bcolors.BOLD}New connect once in {self.sec_change_ip}{bcolors.ENDC}'
-                print(msg)
-                logging.info(msg.upper())
-                return True
+            try:
+                if started and interval_track > self.time_track_ip - 10 and self.origin_ip == track_my_ip():
+                    msg = f'{bcolors.FAIL}IP:{self.origin_ip}.RESET CONNECT{bcolors.ENDC}'
+                    print(msg)
+                    logging.info(msg.upper())
+                    return False
+                elif sec_worked > self.sec_change_ip:
+                    msg = f'{bcolors.BOLD}New connect once in {self.sec_change_ip}{bcolors.ENDC}'
+                    print(msg)
+                    logging.info(msg.upper())
+                    return True
+            except requests.exceptions.ConnectionError as e:
+                pass
         return False
 
     def update_list_file(self) -> list:
