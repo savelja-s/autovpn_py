@@ -2,16 +2,16 @@
 
 import base64
 import datetime
-import io
 import json
 import os
 import random
 import re
 import signal
 import subprocess
-import sys
 import time
 import argparse
+from typing import TextIO
+
 import requests
 import logging
 from simplejson import JSONDecodeError
@@ -54,6 +54,9 @@ class bcolors:
 
 # ROOT_DIR: str = os.path.dirname(__file__) + '/'
 ROOT_DIR: str = '/'
+LOGFILE_PATH = f'{ROOT_DIR}tmp/autovpn_current.log'
+SEC_TO_CONNECT = 8
+
 logging.basicConfig(filename=f'{ROOT_DIR}var/log/autovpn_py.log',
                     filemode='a',
                     format='%(asctime)s %(name)s %(levelname)s %(message)s',
@@ -121,17 +124,35 @@ class AutoVPNConnect:
     sec_change_ip: int = None
     is_force_stopped: bool = False
     run_at = None
+    is_started_VPN = False
+
+    def read_stdout(self):
+        # print('READ_STDOUT')
+        with open(LOGFILE_PATH, 'r') as log_file:
+            content = log_file.read()
+            if not self.is_started_VPN and content.count('Initialization Sequence Completed'):
+                print('Initialization Sequence Completed')
+                self.is_started_VPN = True
+            count_restart = content.count('Restart pause,')
+            if count_restart:
+                print(f'Restart № {count_restart}')
+        # print('END_STDOUT')
 
     def _handler_vpn_loop(self) -> bool:
-        for line in io.TextIOWrapper(self.process.stdout, encoding='utf-8'):
-            if 'Restart pause,' in line:
-                print(line.strip())
-            elif 'Initialization Sequence Completed' in line:
-                print(line.strip())
-            sec_worked = round((self.run_at - datetime.datetime.now()).total_seconds())
+        while self.process.poll() != 0:
+            time.sleep(1)
+            self.read_stdout()
+            # print('LOOP_self.process.poll')
+            if not self.is_started_VPN:
+                print('VPN Status', self.is_started_VPN)
+            sec_worked = round((datetime.datetime.now() - self.run_at).total_seconds())
             interval_track = sec_worked % self.time_track_ip
-            #TODO: якщо немає записц 'Initialization Sequence Completed' 5 секунд рестартнути
-            if interval_track > self.time_track_ip - 10 and self.origin_ip == track_my_ip():
+            if not self.is_started_VPN and sec_worked > SEC_TO_CONNECT:
+                msg = f'{bcolors.FAIL}next server if not connect on {SEC_TO_CONNECT} seconds{bcolors.ENDC}'.upper()
+                print(msg)
+                logging.info(msg)
+                return False
+            elif interval_track > self.time_track_ip and self.origin_ip == track_my_ip():
                 msg = f'{bcolors.FAIL}IP:{self.origin_ip}.RESET CONNECT{bcolors.ENDC}'
                 print(msg)
                 logging.info(msg.upper())
@@ -194,6 +215,26 @@ class AutoVPNConnect:
         print(f'{bcolors.C_GREEN}- Total users: {config["total_users"]}{bcolors.ENDC}')
         print(f'{bcolors.C_GREEN}- Operator: {config["operator"]}{bcolors.ENDC}')
 
+    def init_process(self):
+        self.is_started_VPN = False
+        self.is_force_stopped = False
+        self.run_at = datetime.datetime.now()
+        self.init_config()
+        with open(LOGFILE_PATH, 'w+') as log_file:
+            process = subprocess.Popen([
+                'openvpn',
+                '--connect-retry-max',
+                '1',
+                '--verb',
+                '4',
+                '--auth-nocache',
+                '--config',
+                self.config_path
+            ], stdout=log_file, encoding='utf-8', bufsize=1)
+        msg = f'{bcolors.C_YELLOW}Run... {bcolors.ENDC}{bcolors.OKBLUE}process PID {process.pid} start loop.{bcolors.ENDC}'
+        print(msg)
+        self.process = process
+
     def __init__(self, country_code, _random=False, sec_change_ip=None, _time_track_ip=180):
         self.origin_ip = track_my_ip()
         self.random = _random
@@ -212,22 +253,10 @@ class AutoVPNConnect:
             os.kill(os.getpid(), signal.SIGKILL)
 
     def run(self):
-        self.is_force_stopped = False
-        self.run_at = datetime.datetime.now()
         msg = f'{bcolors.C_GREEN}CURRENT IP: {self.origin_ip}{bcolors.ENDC}'
         print(msg)
         logging.info(msg)
-        self.init_config()
-        self.process = subprocess.Popen([
-            'openvpn',
-            '--verb',
-            '4',
-            '--auth-nocache',
-            '--config',
-            self.config_path
-        ], shell=False, stdout=subprocess.PIPE)
-        print(f'{bcolors.C_YELLOW}Run....{bcolors.ENDC}')
-        print(f'{bcolors.OKBLUE}Process PID {self.process.pid} start loop.{bcolors.ENDC}')
+        self.init_process()
         logging.info('RUN VPN')
         self._handler_vpn_loop()
         self.process.kill()
@@ -277,6 +306,8 @@ def init_arguments() -> list:
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
+    # await main()
+    # exit()
     try:
         attempts, time_ping_ip, country, _random = init_arguments()
         logging.info('START VPN')
