@@ -303,6 +303,7 @@ def init_arguments() -> list:
 
 
 # Press the green button in the gutter to run the script.
+
 if __name__ == '__main__':
     try:
         attempts, time_ping_ip, country, _random = init_arguments()
