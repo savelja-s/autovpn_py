@@ -81,5 +81,5 @@ while true
         CreateVPNConfig
         echo 'Trying to start OpenVPN client'
         sudo openvpn --config /tmp/openvpn3 $VPNproxyString
-#        read -p "Try another VPN server? (Y/N): " confirm && [[ $confirm == [yY] || $confirm == [yY][eE][sS] ]] || exit
+        read -p "Try another VPN server? (Y/N): " confirm && [[ $confirm == [yY] || $confirm == [yY][eE][sS] ]] || exit
     done
