@@ -10,8 +10,6 @@ import signal
 import subprocess
 import time
 import argparse
-from typing import TextIO
-
 import requests
 import logging
 from simplejson import JSONDecodeError
@@ -99,16 +97,16 @@ def save_json(data, file_json: str):
 
 
 def get_vpn_list(url: str):
-    resp = requests.get(url, allow_redirects=True)
+    response = requests.get(url, allow_redirects=True)
     vpn_list = []
-    for line in resp.content.splitlines():
-        line = line.decode('utf-8')
-        if line.startswith('*'):
+    for vpn_server in response.content.splitlines():
+        vpn_server = vpn_server.decode('utf-8')
+        if vpn_server.startswith('*'):
             continue
-        if line.startswith('#'):
-            h = [re.sub(r'(?<!^)(?=[A-Z])', '_', name.lstrip('#').strip()).lower() for name in line.split(',')]
+        if vpn_server.startswith('#'):
+            h = [re.sub(r'(?<!^)(?=[A-Z])', '_', name.lstrip('#').strip()).lower() for name in vpn_server.split(',')]
             continue
-        vpn_info = {h[idx]: item for idx, item in enumerate(line.split(','))}
+        vpn_info = {h[idx]: item for idx, item in enumerate(vpn_server.split(','))}
         vpn_list.append(vpn_info)
     return vpn_list
 
@@ -306,8 +304,6 @@ def init_arguments() -> list:
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    # await main()
-    # exit()
     try:
         attempts, time_ping_ip, country, _random = init_arguments()
         logging.info('START VPN')
