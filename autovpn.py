@@ -82,7 +82,7 @@ class AutoVPNConnect(object):
             if not self.is_started_VPN:
                 print('VPN Status', self.is_started_VPN)
             sec_worked = round((datetime.datetime.now() - self.run_at).total_seconds())
-            print('LOOP TIME', sec_worked)
+            # print('LOOP TIME', sec_worked)
             interval_track = sec_worked % self.time_track_ip
             if not self.is_started_VPN and sec_worked >= SEC_TO_CONNECT:
                 msg = f'{bcolors.FAIL}next server if not connect on {SEC_TO_CONNECT} seconds{bcolors.ENDC}'.upper()
