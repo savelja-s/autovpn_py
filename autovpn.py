@@ -27,8 +27,6 @@ class AutoVPNConnect(object):
     url_list_vpn: str = 'https://www.vpngate.net/api/iphone/'
     random: bool
     country_code: str = None
-    vpn_list: list = None
-    current_index: int = None
     process = None
     sec_change_ip: int = None
     is_force_stopped: bool = False
@@ -53,7 +51,6 @@ class AutoVPNConnect(object):
             self.sec_change_ip = sec_change_ip
         if country_code:
             self.country_code = country_code.upper()
-        self.current_index = -1
         signal.signal(signal.SIGTSTP, self.ctrl_z)  # ctrl + z
         signal.signal(signal.SIGINT, self.ctrl_c)  # ctrl + c
 
